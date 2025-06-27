@@ -1,0 +1,51 @@
+pipelines:
+  branches:
+    development:
+      - step:
+          name: Build Docker Image
+          runs-on:
+            - self.hosted
+            - linux.shell
+            - crm.frontend.dev
+          script:
+            - echo "Cloning repo and building image"
+            - git clone https://x-token-auth:${BITBUCKET_ACCESS_TOKEN}@bitbucket.org/team_jupiter/crm-ui.git
+            - cd crm-ui
+            - sudo docker build -t 798172179240.dkr.ecr.ap-south-1.amazonaws.com/crm-frontend-dev:${BITBUCKET_BUILD_NUMBER} --build-arg env=development Admin/
+
+      - step:
+          name: Push Docker Image to ECR
+          runs-on:
+            - self.hosted
+            - linux.shell
+            - crm.frontend.dev
+          script:
+            - echo "Authenticating & Pushing"
+            - aws ecr get-login-password --region ap-south-1 | sudo docker login --username AWS --password-stdin 798172179240.dkr.ecr.ap-south-1.amazonaws.com
+            - sudo docker push 798172179240.dkr.ecr.ap-south-1.amazonaws.com/crm-frontend-dev:${BITBUCKET_BUILD_NUMBER}
+
+      - step:
+          name: Deploy to Dev
+          deployment: Dev
+          runs-on:
+            - self.hosted
+            - linux.shell
+            - crm.frontend.dev
+          script:
+            - echo "Deploying to Dev"
+            - sudo docker rm -f crm-ui || true
+            - sudo docker run -dit --name crm-ui --restart always 798172179240.dkr.ecr.ap-south-1.amazonaws.com/crm-frontend-dev:${BITBUCKET_BUILD_NUMBER}
+
+      - step:
+          name: Deploy to QA
+          deployment: QA
+          trigger: manual
+          runs-on:
+            - self.hosted
+            - linux.shell
+            - crm.frontend.qa
+          script:
+            - echo "Deploying to QA"
+            - pwd
+            - sudo docker rm -f crm-ui || true
+            - sudo docker run -dit --name crm-ui --restart always 798172179240.dkr.ecr.ap-south-1.amazonaws.com/crm-frontend-dev:${BITBUCKET_BUILD_NUMBER}
